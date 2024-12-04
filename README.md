@@ -28,6 +28,12 @@ A small tool that requires a server, which can create a simple webpage, allowing
 2. 将视频文件放入public/videos目录
 3. 访问 http://<你的服务器ip>:3000
 
+**需要端口**
+
+- 3000
+- 80（http）
+- 443（https）
+  
 **相关链接**
 
 · [项目地址](https://github.com/Deepblue-Sky2333/Online-Coplayer)

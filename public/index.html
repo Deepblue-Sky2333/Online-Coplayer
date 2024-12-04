@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>在线放映室</title>
+</head>
+<body>
+    <h1>视频同步放映室</h1>
+    <video id="video" controls>
+        <source src="videos/movie.mp4" type="video/mp4">
+        您的浏览器不支持视频播放。
+    </video>
+
+    <script>
+        const video = document.getElementById('video');
+
+        // 建立 WebSocket 连接
+        const ws = new WebSocket(`ws://${location.host}`);
+
+        let lastSyncTime = 0; // 上一次同步时间
+
+        // 限制同步频率函数（节流）
+        function throttleSync() {
+            const now = Date.now();
+            if (now - lastSyncTime > 500) { // 限制为每 500 毫秒同步一次
+                lastSyncTime = now;
+                return true;
+            }
+            return false;
+        }
+
+        // 接收 WebSocket 消息
+        ws.onmessage = (event) => {
+            const data = JSON.parse(event.data);
+
+            if (data.type === 'playState') {
+                const clientTime = video.currentTime; // 当前设备的视频时间
+                const serverTime = data.currentTime; // 服务器广播的时间
+
+                // 计算时间差，进行时间校正
+                const timeDiff = Math.abs(clientTime - serverTime);
+
+                // 如果时间差大于 0.3 秒，则进行校正
+                if (timeDiff > 0.3) {
+                    video.currentTime = serverTime;
+                }
+
+                // 同步播放/暂停状态
+                if (data.playing) {
+                    video.play();
+                } else {
+                    video.pause();
+                }
+            }
+        };
+
+        // 监听视频事件，发送状态到服务器
+        video.addEventListener('play', () => {
+            if (throttleSync()) {
+                ws.send(JSON.stringify({ type: 'playState', playing: true, currentTime: video.currentTime }));
+            }
+        });
+
+        video.addEventListener('pause', () => {
+            if (throttleSync()) {
+                ws.send(JSON.stringify({ type: 'playState', playing: false, currentTime: video.currentTime }));
+            }
+        });
+
+        video.addEventListener('seeked', () => {
+            if (throttleSync()) {
+                ws.send(JSON.stringify({ type: 'playState', playing: !video.paused, currentTime: video.currentTime }));
+            }
+        });
+    </script>
+</body>
+</html>

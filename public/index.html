@@ -4,13 +4,212 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>在线放映室</title>
+	<style>
+    .custom-video {
+        width: 100%;
+        max-width: 800px;
+        margin: 20px auto;
+        display: block;
+        background: #000;
+        border: 1px solid #ccc;
+        border-radius: 8px;
+    }
+	.controls #sync {
+		background: #007bff; /* 蓝色按钮 */
+		color: white;
+		border: none;
+		padding: 10px 20px;
+		border-radius: 4px;
+		cursor: pointer;
+	}
+
+	.controls #sync:hover {
+		background: #0056b3; /* 鼠标悬浮效果 */
+	}
+    .controls {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        max-width: 800px;
+        margin: 0 auto;
+        padding: 10px;
+        background: #222;
+        border-radius: 8px;
+        color: white;
+    }
+
+    /* 通用按钮样式 */
+	button {
+		border: none;
+		border-radius: 4px;
+		padding: 10px 20px;
+		font-size: 16px;
+		font-weight: bold;
+		cursor: pointer;
+		transition: background-color 0.3s, color 0.3s;
+	}
+
+    .controls button:hover {
+        background: #666;
+    }
+
+    .controls input[type="range"] {
+        -webkit-appearance: none;
+        width: 100px;
+        background: #333;
+        border-radius: 4px;
+        height: 4px;
+        cursor: pointer;
+    }
+
+    .controls input[type="range"]::-webkit-slider-thumb {
+        -webkit-appearance: none;
+        background: #888;
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        cursor: pointer;
+    	}
+	/* 播放按钮样式 */
+	button.play {
+		background-color: #39c5bb; /* 绿色背景 */
+		color: white; /* 白色文字 */
+	}
+
+	/* 暂停按钮样式 */
+	button.pause {
+		background-color: #f44336; /* 红色背景 */
+		color: white; /* 白色文字 */
+	}
+	
+	#progress {
+    width: 50%;
+    height: 7px; /* 增加高度使其更粗 */
+    appearance: none; /* 去除浏览器默认样式 */
+    background: #ccc; /* 背景颜色 */
+    border-radius: 5px; /* 圆角 */
+    cursor: pointer;
+	}
+
+	#progress::-webkit-slider-thumb {
+		-webkit-appearance: none;
+		appearance: none;
+		width: 16px; /* 调整滑块大小 */
+		height: 16px;
+		background: #39c5bb; /* 滑块颜色 */
+		border-radius: 50%; /* 圆形滑块 */
+		cursor: pointer;
+	}
+	
+	#timeDisplay {
+    font-size: 14px; /* 字体大小 */
+    color: #888; /* 文字颜色 */
+    margin-left: 10px; /* 左侧间距 */
+    font-family: Arial, sans-serif; /* 字体 */
+	}
+	
+	</style>
 </head>
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    const video = document.getElementById('video');
+    const playPauseButton = document.getElementById('playPause');
+    const progress = document.getElementById('progress');
+    const volumeSlider = document.getElementById('volume');
+    const syncButton = document.getElementById('sync');
+    const timeDisplay = document.getElementById('timeDisplay');
+    // WebSocket 连接
+    const ws = new WebSocket(`ws://${location.host}`);
+
+
+    // 格式化时间为 mm:ss 格式
+    function formatTime(seconds) {
+        const minutes = Math.floor(seconds / 60);
+        const secs = Math.floor(seconds % 60);
+        return `${String(minutes).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+    }
+
+    // 元数据加载完成时更新总时间
+    video.addEventListener('loadedmetadata', () => {
+        const totalTime = formatTime(video.duration);
+        timeDisplay.textContent = `00:00 / ${totalTime}`;
+    });
+
+    // 播放进度更新时更新当前时间
+    video.addEventListener('timeupdate', () => {
+        const currentTime = formatTime(video.currentTime);
+        const totalTime = formatTime(video.duration);
+        timeDisplay.textContent = `${currentTime} / ${totalTime}`;
+        progress.value = (video.currentTime / video.duration) * 100;
+     });
+
+    // 播放和暂停逻辑
+    playPauseButton.addEventListener('click', () => {
+        if (video.paused) {
+            video.play();
+            playPauseButton.textContent = '暂停';
+            playPauseButton.classList.remove('play');
+            playPauseButton.classList.add('pause');
+        } else {
+            video.pause();
+            playPauseButton.textContent = '播放';
+            playPauseButton.classList.remove('pause');
+            playPauseButton.classList.add('play');
+        }
+    });
+
+    // 同步按钮逻辑
+    syncButton.addEventListener('click', () => {
+        ws.send(JSON.stringify({ type: 'syncRequest' }));
+        console.log('Sync request sent to server');
+    });
+
+    // 处理 WebSocket 消息
+    ws.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+        if (data.type === 'playState') {
+            if (Math.abs(video.currentTime - data.currentTime) > 0.5) {
+                video.currentTime = data.currentTime;
+            }
+            if (data.playing) {
+                video.play();
+            } else {
+                video.pause();
+            }
+        }
+    };
+
+    // 更新进度条
+    video.addEventListener('timeupdate', () => {
+        progress.value = (video.currentTime / video.duration) * 100;
+    });
+
+    // 调整进度
+    progress.addEventListener('input', () => {
+        video.currentTime = (progress.value / 100) * video.duration;
+    });
+
+    // 调整音量
+    volumeSlider.addEventListener('input', () => {
+        video.volume = volumeSlider.value / 100;
+    });
+});
+</script>
+
 <body>
-    <h1>视频同步放映室</h1>
-    <video id="video" controls>
-        <source src="videos/movie.mp4" type="video/mp4">
-        您的浏览器不支持视频播放。
-    </video>
+<h1><strong>视频同步放映室</strong></h1>
+<video id="video" class="custom-video">
+  <source src="videos/movie.mp4" type="video/mp4">
+    您的浏览器不支持视频播放。
+</video>
+<div class="controls">
+    <button id="playPause" class="play">播放</button>
+	<button id="sync">同步</button>
+	<span id="timeDisplay">00:00 / 00:00</span>
+    <input type="range" id="progress" value="0" max="100">
+    <input type="range" id="volume" value="100" max="100">
+</div>
 
     <script>
         const video = document.getElementById('video');
@@ -41,8 +240,8 @@
                 // 计算时间差，进行时间校正
                 const timeDiff = Math.abs(clientTime - serverTime);
 
-                // 如果时间差大于 0.3 秒，则进行校正
-                if (timeDiff > 0.3) {
+                // 如果时间差大于 0.5 秒，则进行校正
+                if (timeDiff > 0.5) {
                     video.currentTime = serverTime;
                 }
 
